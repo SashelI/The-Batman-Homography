@@ -8,7 +8,8 @@ vector<Point3f> X_3D;
 vector<vector<Point3f>> objPoint;
 vector<vector<Point2f>> imgPoint;
 
-Mat cameraMatrix, distCoeffs, R, T;
+Mat cameraMatrix, distCoeffs;
+vector<Mat> R, T;
 
 void onMouse(int action, int x, int y, int, void*) {
     if (action == cv::EVENT_LBUTTONDOWN) {
@@ -55,10 +56,14 @@ int main(int argc, char** argv)
     objPoint.push_back(X_3D);
 
     calibrateCamera(objPoint, imgPoint, I0.size(), cameraMatrix, distCoeffs, R, T);
-
+    Mat Rmat;
+    Rodrigues(R[0], Rmat);
+    Mat RT;
+    hconcat(Rmat, T[0], RT);
+    RT.convertTo(RT, cameraMatrix.type());
     test.convertTo(test, cameraMatrix.type());
-
-    Mat Xmeter = cameraMatrix.inv() * test;
+    Mat product = cameraMatrix * RT;
+    Mat Xmeter = product.inv() * test;
 
     cout << Xmeter << endl;
 }
