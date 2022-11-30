@@ -8,7 +8,7 @@ vector<Point3f> X_3D;
 vector<vector<Point3f>> objPoint;
 vector<vector<Point2f>> imgPoint;
 
-Mat cameraMatrix, distCoeffs;
+Mat K, distCoeffs;
 vector<Mat> R, T;
 
 void onMouse(int action, int x, int y, int, void*) {
@@ -74,7 +74,7 @@ int main(int argc, char** argv)
     X_3D.push_back(Point3f(0.21f, 0.16f, 0.0f));
     objPoint.push_back(X_3D);
 
-    calibrateCamera(objPoint, imgPoint, I0.size(), cameraMatrix, distCoeffs, R, T);
+    calibrateCamera(objPoint, imgPoint, I0.size(), K, distCoeffs, R, T);
 
     vector<Mat> corners;
     for (const auto& point : X)
@@ -83,7 +83,7 @@ int main(int argc, char** argv)
         vectX.at<float>(0, 0) = point.x;
         vectX.at<float>(1, 0) = point.y;
         vectX.at<float>(2, 0) = 1.0f;
-        vectX.convertTo(vectX, cameraMatrix.type());
+        vectX.convertTo(vectX, K.type());
         cout << vectX << endl;
         corners.push_back(vectX);
     }
@@ -91,12 +91,12 @@ int main(int argc, char** argv)
     vector<Mat>cornersMeter;
     for (const auto& p : corners)
     {
-        Mat Xmeter = cameraMatrix.inv() * p;
+        Mat Xmeter = K.inv() * p;
         cout << Xmeter << endl;
         cornersMeter.push_back(Xmeter);
     }
     for (const auto& p : cornersMeter) {
-        Mat px = cameraMatrix * p;
+        Mat px = K * p;
         px.convertTo(px, CV_32SC1);
         cout << px << endl;
         Point point = Point{ px.at<int>(0,0), px.at<int>(1, 0)};
@@ -104,6 +104,44 @@ int main(int argc, char** argv)
     }
     imshow("Corners", I0);
     cv::waitKey(0);
+
+    //------------------------------------------------------------------------------
+
+    Mat projRT, Rmat, r12, r1, r2, PI;
+    Rodrigues(R[0], Rmat);
+    hconcat(Rmat.col(0), Rmat.col(1), r12);
+    hconcat(r12, T[0], projRT);
+    //Mat d = Mat::eye(3, 3, projRT.type());
+    Mat H0w = K * projRT; //* d;
+    /*Mat h12 = K.inv() * H;
+    int s = h12.col(2).rows / h12.col(1).rows;*/
+    Mat toR = K.inv() * H0w;
+    r1 = toR.col(1); r2 = toR.col(2);
+    Mat tmp1, tmp2;
+    hconcat(r1, r2, tmp1);
+    hconcat(tmp1, r1.cross(r2), tmp2);
+    hconcat(tmp2, T[0], PI);
+    Mat P0w = K * PI;
+    Mat test = K * P0w; //homogène colonne 0001
+    vector<Mat>xtest;
+    for (const auto& point : X)
+    {
+        Mat vectX = Mat(4, 1, CV_32F, 0.0f);
+        vectX.at<float>(0, 0) = point.x;
+        vectX.at<float>(1, 0) = point.y;
+        vectX.at<float>(2, 0) = 0.0f;
+        vectX.at<float>(3, 0) = 1.0f;
+        vectX.convertTo(vectX, test.type());
+        xtest.push_back(vectX);
+    }
+    for (const auto& x : xtest)
+    {
+        cout << test.inv() << endl;
+    }
+
+    //------------------------------------------------------------------------------
+
+
 }
 
 
