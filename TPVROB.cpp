@@ -69,9 +69,9 @@ int main(int argc, char** argv)
     imgPoint.push_back(X);
 
     X_3D.push_back(Point3f(0.0f, 0.0f, 0.0f));
-    X_3D.push_back(Point3f(0.21f, 0.0f, 0.0f));
-    X_3D.push_back(Point3f(0.0f, 0.16f, 0.0f));
-    X_3D.push_back(Point3f(0.21f, 0.16f, 0.0f));
+    X_3D.push_back(Point3f(1.0f, 0.0f, 0.0f));
+    X_3D.push_back(Point3f(0.0f, 1.0f, 0.0f));
+    X_3D.push_back(Point3f(1.0f, 1.0f, 0.0f));
     objPoint.push_back(X_3D);
 
     calibrateCamera(objPoint, imgPoint, I0.size(), K, distCoeffs, R, T);
@@ -89,19 +89,24 @@ int main(int argc, char** argv)
     }
 
     vector<Mat>cornersMeter;
+    vector<Point2f>objectPointsPlanar;
     for (const auto& p : corners)
     {
         Mat Xmeter = K.inv() * p;
         cout << Xmeter << endl;
+        objectPointsPlanar.push_back(Point2f(Xmeter.at<double>(0, 0), Xmeter.at<double>(1, 0)));
         cornersMeter.push_back(Xmeter);
     }
     for (const auto& p : cornersMeter) {
         Mat px = K * p;
         px.convertTo(px, CV_32SC1);
-        cout << px << endl;
         Point point = Point{ px.at<int>(0,0), px.at<int>(1, 0)};
         circle(I0, point, 5, Scalar{ 255, 0, 0 }, FILLED);
     }
+
+    Mat H = findHomography(objectPointsPlanar, X);
+    cout << "H:\n" << H << endl;
+
     imshow("Corners", I0);
     cv::waitKey(0);
 
@@ -111,18 +116,23 @@ int main(int argc, char** argv)
     Rodrigues(R[0], Rmat);
     hconcat(Rmat.col(0), Rmat.col(1), r12);
     hconcat(r12, T[0], projRT);
-    //Mat d = Mat::eye(3, 3, projRT.type());
-    Mat H0w = K * projRT; //* d;
-    /*Mat h12 = K.inv() * H;
-    int s = h12.col(2).rows / h12.col(1).rows;*/
+    Mat d = Mat::eye(3, 3, projRT.type());
+    Mat h12 = K.inv() * H;
+    int s = h12.col(2).rows / h12.col(1).rows;
+    d.at<double>(1, 1) = 1.0 / s;
+    cout << d << endl;
+    Mat H0w = H * d;
     Mat toR = K.inv() * H0w;
-    r1 = toR.col(1); r2 = toR.col(2);
+    r1 = toR.col(0); r2 = toR.col(1);
     Mat tmp1, tmp2;
     hconcat(r1, r2, tmp1);
     hconcat(tmp1, r1.cross(r2), tmp2);
-    hconcat(tmp2, T[0], PI);
+    hconcat(tmp2, h12.col(2), PI);
     Mat P0w = K * PI;
-    Mat test = K * P0w; //homogène colonne 0001
+
+    Mat homogene = Mat(1, 4, P0w.type(), 0.0);
+    homogene.at<double>(0, 3) = 1.0;
+    vconcat(P0w, homogene, P0w);
     vector<Mat>xtest;
     for (const auto& point : X)
     {
@@ -131,14 +141,33 @@ int main(int argc, char** argv)
         vectX.at<float>(1, 0) = point.y;
         vectX.at<float>(2, 0) = 0.0f;
         vectX.at<float>(3, 0) = 1.0f;
-        vectX.convertTo(vectX, test.type());
+        vectX.convertTo(vectX, P0w.type());
         xtest.push_back(vectX);
     }
     for (const auto& x : xtest)
     {
-        cout << test.inv() << endl;
+        cout << x << endl;
+        Mat posetest = P0w.inv() * x;
+        cout << posetest << endl;
     }
+    vector<Mat>pointTest;
+    for (const auto& p : X_3D)
+    {
+        Mat vec = Mat(4, 1, CV_32F, 0.0f);
+        vec.at<float>(0, 0) = p.x;
+        vec.at<float>(1, 0) = p.y;
+        vec.at<float>(2, 0) = 0.0f;
+        vec.at<float>(3, 0) = 1.0f;
+        vec.convertTo(vec, P0w.type());
 
+        Mat posetest = P0w * vec;
+        cout << posetest << endl;
+        pointTest.push_back(posetest);
+    }
+    line(I0, Point(pointTest[0].at<double>(0, 0), pointTest[0].at<double>(1, 0)), Point(pointTest[1].at<double>(0, 0), pointTest[1].at<double>(1, 0)), (255, 0, 0), 1);
+    line(I0, Point(pointTest[0].at<double>(0, 0), pointTest[0].at<double>(1, 0)), Point(pointTest[2].at<double>(0, 0), pointTest[2].at<double>(1, 0)), (0, 0, 255), 1);
+    imshow("Corners", I0);
+    cv::waitKey(0);
     //------------------------------------------------------------------------------
 
 
