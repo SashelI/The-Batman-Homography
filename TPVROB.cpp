@@ -45,7 +45,7 @@ int main(int argc, char** argv)
     string smallPath = R"(C:\Users\user\Documents\_ESIRTP\3\VROB\imtest.jpg)";
     string bigPath = R"(D:\Documents\_TPESIR\3\VROB_data\imtest.jpg)";
 
-    Mat I0full = imread(bigPath);
+    Mat I0full = imread(smallPath);
     Mat I0;
 
     resize(I0full, I0, Size(I0full.cols / 2, I0full.rows / 2)); //width, height
@@ -84,6 +84,7 @@ int main(int argc, char** argv)
 
     cout << "-------------------" << endl;
     vector<Mat> corners;
+
     for (const auto& point : X)
     {
         Mat vectX = Mat(3, 1, CV_32F, 0.0f);
@@ -131,6 +132,7 @@ int main(int argc, char** argv)
     Mat homogene = Mat(1, 4, P0w.type(), 0.0);
     homogene.at<double>(0, 3) = 1.0;
     vconcat(P0w, homogene, P0w);
+    cout << P0w << endl;
     vector<Mat>xtest;
     for (const auto& point : X)
     {
@@ -143,9 +145,9 @@ int main(int argc, char** argv)
     }
     for (const auto& x : xtest)
     {
-        cout << "Point en px : \n"<< x << endl;
+        cout << "Point en px : \n" << x << endl;
         Mat posetest = P0w.inv() * x - Mat(4, 1, P0w.type(), 1.0);
-        cout << "Point en 3D : \n"<<posetest << endl;
+        cout << "Point en 3D : \n" << posetest << endl;
     }
 
     vector<Mat>pointTest;
@@ -159,17 +161,33 @@ int main(int argc, char** argv)
 
         Mat posetest = P0w * vec;
 
-        cout << "Point en px : \n"<<posetest << endl;
+        cout << "Point en px : \n" << posetest << endl;
         pointTest.push_back(posetest);
     }
-    line(I0, Point(pointTest[0].at<double>(0, 0), pointTest[0].at<double>(1, 0)), Point(pointTest[1].at<double>(0, 0), pointTest[1].at<double>(1, 0)), Scalar(0, 0, 255), 2);
-    line(I0, Point(pointTest[0].at<double>(0, 0), pointTest[0].at<double>(1, 0)), Point(pointTest[2].at<double>(0, 0), pointTest[2].at<double>(1, 0)), Scalar(0, 255, 0), 2);
-    line(I0, Point(pointTest[0].at<double>(0, 0), pointTest[0].at<double>(1, 0)), Point(pointTest[3].at<double>(0, 0), pointTest[3].at<double>(1, 0)), Scalar(255, 0, 0), 2);
-    imshow("Corners", I0);
+    Mat I0_ = I0.clone();
+    line(I0_, Point(pointTest[0].at<double>(0, 0), pointTest[0].at<double>(1, 0)), Point(pointTest[1].at<double>(0, 0), pointTest[1].at<double>(1, 0)), Scalar(0, 0, 255), 2);
+    line(I0_, Point(pointTest[0].at<double>(0, 0), pointTest[0].at<double>(1, 0)), Point(pointTest[2].at<double>(0, 0), pointTest[2].at<double>(1, 0)), Scalar(0, 255, 0), 2);
+    line(I0_, Point(pointTest[0].at<double>(0, 0), pointTest[0].at<double>(1, 0)), Point(pointTest[3].at<double>(0, 0), pointTest[3].at<double>(1, 0)), Scalar(255, 0, 0), 2);
+    imshow("Corners", I0_);
     cv::waitKey(0);
+
     //------------------------------------------------------------------------------
 
-
+    Ptr<SIFT> sift = SIFT::create();
+    vector<KeyPoint> keyPoints;
+    Mat kpMask = Mat::zeros(I0.rows, I0.cols, CV_8U);
+    for (int j = X[0].x; j < X[3].x + 1; j++)
+    {
+        for (int i = X[0].y; i < X[3].y + 1; i++)
+        {
+            kpMask.at<uint8_t>(i, j) = 1;
+        }
+    }
+    sift->detect(I0, keyPoints, kpMask);
+    Mat img = I0.clone();
+    drawKeypoints(I0, keyPoints, img);
+    imshow("KeyPoints", img);
+    cv::waitKey(0);
 }
 
 
