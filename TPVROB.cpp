@@ -63,6 +63,7 @@ int main(int argc, char** argv)
         imshow("Corners Select", I0);
         cv::waitKey(25);
     }
+    circle(I0, X[3], 2, Scalar{ 0, 0, 255 }, FILLED);
 
     //------------------------------------------------------------------------------
 
@@ -108,12 +109,9 @@ int main(int argc, char** argv)
 
     //------------------------------------------------------------------------------
 
-    Mat projRT, Rmat, r12, r1, r2, PI;
-    Rodrigues(R[0], Rmat);
-    hconcat(Rmat.col(0), Rmat.col(1), r12);
-    hconcat(r12, T[0], projRT);
+    Mat r12, r1, r2, PI;
 
-    Mat d = Mat::eye(3, 3, projRT.type());
+    Mat d = Mat::eye(3, 3, K.type());
     Mat h12 = K.inv() * H;
     int s = h12.col(2).rows / h12.col(1).rows;
     d.at<double>(1, 1) = 1.0 / s;
@@ -159,7 +157,9 @@ int main(int argc, char** argv)
         vec.at<double>(2, 0) = 0.0;
         vec.at<double>(3, 0) = 1.0;
 
-        Mat posetest = P0w * vec;
+        //projectPoints(vec, R, T, K, distCoeffs, pointTest);
+
+        Mat posetest = K* P0w * vec;
 
         cout << "Point en px : \n" << posetest << endl;
         pointTest.push_back(posetest);
