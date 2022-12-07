@@ -42,7 +42,7 @@ string openCVType2str(int type) {
 
 int main(int argc, char** argv)
 {
-    string smallPath = R"(C:\Users\user\Documents\_ESIRTP\3\VROB\imtest.jpg)";
+    string smallPath = R"(C:\Users\user\Documents\_ESIRTP\3\VROB\Batman.jpg)";
     string bigPath = R"(D:\Documents\_TPESIR\3\VROB_data\imtest.jpg)";
 
     Mat I0full = imread(smallPath);
@@ -97,13 +97,13 @@ int main(int argc, char** argv)
         corners.push_back(vectX);
     }
 
-    /*vector<Mat>cornersMeter;
+    vector<Point2f>cornersMeter;
     for (const auto& p : corners)
     {
         Mat Xmeter = K.inv() * p;
         cout << "Point repere camera : \n"<< Xmeter << endl;
-        cornersMeter.push_back(Xmeter);
-    }*/
+        cornersMeter.push_back(Point2f(Xmeter.at<double>(0,0), Xmeter.at<double>(1,0)));
+    }
 
     Mat H = findHomography(objectPointsPlanar, X);
 
@@ -137,18 +137,25 @@ int main(int argc, char** argv)
         Mat vectX = Mat(4, 1, P0w.type(), 0.0);
         vectX.at<double>(0, 0) = point.x;
         vectX.at<double>(1, 0) = point.y;
-        vectX.at<double>(2, 0) = 0.0;
         vectX.at<double>(3, 0) = 1.0;
         xtest.push_back(vectX);
     }
     for (const auto& x : xtest)
     {
         cout << "Point en px : \n" << x << endl;
-        Mat posetest = P0w.inv() * x - Mat(4, 1, P0w.type(), 1.0);
+        Mat posetest = H0w.inv() * x;
         cout << "Point en 3D : \n" << posetest << endl;
     }
 
-    vector<Mat>pointTest;
+    vector<Point3f>pointTest;
+
+    Mat axisx = Mat({ 1.0, 0.0, 0.0, 1.0 });
+    Mat axisy = Mat({ 0.0, 1.0, 0.0, 1.0 });
+    Mat axisz = Mat({ 0.0, 0.0, 1.0, 1.0 });
+    Mat origin = Mat({ 0.0, 0.0, 0.0, 1.0 });
+
+    vector<Mat> coordinatesSystem;
+
     for (const auto& p : X_3D)
     {
         Mat vec = Mat(4, 1, P0w.type(), 0.0);
@@ -157,17 +164,21 @@ int main(int argc, char** argv)
         vec.at<double>(2, 0) = 0.0;
         vec.at<double>(3, 0) = 1.0;
 
-        //projectPoints(vec, R, T, K, distCoeffs, pointTest);
+        Mat posetest = P0w * vec;
 
-        Mat posetest = K* P0w * vec;
-
-        cout << "Point en px : \n" << posetest << endl;
-        pointTest.push_back(posetest);
+        pointTest.push_back(Point3f(posetest.at<double>(0,0), posetest.at<double>(1,0), posetest.at<double>(2,0)));
     }
+    vector<Point2f>endPointTest;
+    for (auto& p : pointTest)
+    {
+        endPointTest.push_back(Point2f(p.x / p.z, p.y / p.z));
+        cout << "Point en px : \n" << p << endl;
+    }
+
     Mat I0_ = I0.clone();
-    line(I0_, Point(pointTest[0].at<double>(0, 0), pointTest[0].at<double>(1, 0)), Point(pointTest[1].at<double>(0, 0), pointTest[1].at<double>(1, 0)), Scalar(0, 0, 255), 2);
-    line(I0_, Point(pointTest[0].at<double>(0, 0), pointTest[0].at<double>(1, 0)), Point(pointTest[2].at<double>(0, 0), pointTest[2].at<double>(1, 0)), Scalar(0, 255, 0), 2);
-    line(I0_, Point(pointTest[0].at<double>(0, 0), pointTest[0].at<double>(1, 0)), Point(pointTest[3].at<double>(0, 0), pointTest[3].at<double>(1, 0)), Scalar(255, 0, 0), 2);
+    line(I0_, endPointTest[0], endPointTest[1], Scalar(0, 0, 255), 2);
+    line(I0_, endPointTest[0], endPointTest[2], Scalar(0, 255, 0), 2);
+    line(I0_, endPointTest[0], endPointTest[3], Scalar(255, 0, 0), 2);
     imshow("Corners", I0_);
     cv::waitKey(0);
 
@@ -188,6 +199,8 @@ int main(int argc, char** argv)
     drawKeypoints(I0, keyPoints, img);
     imshow("KeyPoints", img);
     cv::waitKey(0);
+
+    //------------------------------------------------------------------------------
 }
 
 
