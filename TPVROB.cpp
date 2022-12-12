@@ -1,4 +1,5 @@
 #include <opencv2/opencv.hpp>
+#include <opencv2/videoio.hpp>
 
 using namespace cv;
 using namespace std;
@@ -44,6 +45,8 @@ int main(int argc, char** argv)
 {
     string smallPath = R"(C:\Users\user\Documents\_ESIRTP\3\VROB\Batman.jpg)";
     string bigPath = R"(D:\Documents\_TPESIR\3\VROB_data\imtest.jpg)";
+    string smallVideo = R"(C:\Users\user\Documents\_ESIRTP\3\VROB\BatVideo.mp4)";
+
 
     Mat I0full = imread(smallPath);
     Mat I0;
@@ -154,9 +157,9 @@ int main(int argc, char** argv)
     Mat axisz = Mat({ 0.0, 0.0, 1.0, 1.0 });
     Mat origin = Mat({ 0.0, 0.0, 0.0, 1.0 });
 
-    vector<Mat> coordinatesSystem;
+    vector<Mat> coordinateSystem = { origin, axisx, axisy, axisz };
 
-    for (const auto& p : X_3D)
+    /*for (const auto& p : X_3D)
     {
         Mat vec = Mat(4, 1, P0w.type(), 0.0);
         vec.at<double>(0, 0) = p.x;
@@ -168,6 +171,7 @@ int main(int argc, char** argv)
 
         pointTest.push_back(Point3f(posetest.at<double>(0,0), posetest.at<double>(1,0), posetest.at<double>(2,0)));
     }
+
     vector<Point2f>endPointTest;
     for (auto& p : pointTest)
     {
@@ -179,7 +183,20 @@ int main(int argc, char** argv)
     line(I0_, endPointTest[0], endPointTest[1], Scalar(0, 0, 255), 2);
     line(I0_, endPointTest[0], endPointTest[2], Scalar(0, 255, 0), 2);
     line(I0_, endPointTest[0], endPointTest[3], Scalar(255, 0, 0), 2);
-    imshow("Corners", I0_);
+    imshow("Corners", I0_);*/
+
+    vector <Point2f> coordSystem2D;
+    for (const auto& p : coordinateSystem)
+    {
+        Mat tmp = P0w * p;
+        Point2f cs2D = Point2f(tmp.at<double>(0, 0) / tmp.at<double>(2, 0), tmp.at<double>(1, 0) / tmp.at<double>(2, 0));
+        coordSystem2D.push_back(cs2D);
+    }
+    Mat I0_axis = I0.clone();
+    line(I0_axis, coordSystem2D[0], coordSystem2D[1], Scalar(0, 0, 255), 2);
+    line(I0_axis, coordSystem2D[0], coordSystem2D[2], Scalar(0, 255, 0), 2);
+    line(I0_axis, coordSystem2D[0], coordSystem2D[3], Scalar(255, 0, 0), 2);
+    imshow("Corners", I0_axis);
     cv::waitKey(0);
 
     //------------------------------------------------------------------------------
@@ -201,6 +218,16 @@ int main(int argc, char** argv)
     cv::waitKey(0);
 
     //------------------------------------------------------------------------------
+
+    VideoCapture vid;
+    vid.open(smallVideo);
+    while(vid.isOpened())
+    {
+        Mat frame;
+        vid.read(frame);
+        imshow("batvid", frame);
+        cv::waitKey(25);
+    }
 }
 
 
