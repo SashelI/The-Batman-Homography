@@ -44,14 +44,14 @@ string openCVType2str(int type) {
 int main(int argc, char** argv)
 {
     string smallPath = R"(C:\Users\user\Documents\_ESIRTP\3\VROB\Batman.jpg)";
-    string bigPath = R"(D:\Documents\_TPESIR\3\VROB_data\imtest.jpg)";
+    string bigPath = R"(D:\Documents\_TPESIR\3\VROB_data\Batman_r.jpg)";
     string smallVideo = R"(C:\Users\user\Documents\_ESIRTP\3\VROB\BatVideo.mp4)";
+    string bigVideo = R"(D:\Documents\_TPESIR\3\VROB_data\BatVideo.mp4)";
 
-
-    Mat I0full = imread(smallPath);
+    Mat I0full = imread(bigPath);
     Mat I0;
+    resize(I0full, I0, Size(I0full.cols / 1.5, I0full.rows / 1.5)); //width, height
 
-    resize(I0full, I0, Size(I0full.cols / 2, I0full.rows / 2)); //width, height
 
     //----------------------------------------------------------------------------------
 
@@ -202,7 +202,8 @@ int main(int argc, char** argv)
     //------------------------------------------------------------------------------
 
     Ptr<SIFT> sift = SIFT::create();
-    vector<KeyPoint> keyPoints;
+    vector<KeyPoint> keyPoints0, KeyPoints1;
+    Mat desc0, desc1;
     Mat kpMask = Mat::zeros(I0.rows, I0.cols, CV_8U);
     for (int j = X[0].x; j < X[3].x + 1; j++)
     {
@@ -211,23 +212,79 @@ int main(int argc, char** argv)
             kpMask.at<uint8_t>(i, j) = 1;
         }
     }
-    sift->detect(I0, keyPoints, kpMask);
+    sift->detectAndCompute(I0, kpMask, keyPoints0, desc0);
     Mat img = I0.clone();
-    drawKeypoints(I0, keyPoints, img);
+    drawKeypoints(I0, keyPoints0, img);
     imshow("KeyPoints", img);
     cv::waitKey(0);
 
     //------------------------------------------------------------------------------
 
+	VideoWriter render("test.avi", VideoWriter::fourcc('M', 'J', 'P', 'G'), 30, Size(I0.cols*2, I0.rows));
     VideoCapture vid;
-    vid.open(smallVideo);
-    while(vid.isOpened())
+    vid.open(bigVideo);
+
+    vector<Point2f>kp0, newkp, oldkp;
+
+    Ptr<FlannBasedMatcher> matcher = FlannBasedMatcher::create();
+
+    //------------------------------------------------------------------------------
+
+    Mat oldFrame = I0.clone();
+    oldkp = kp0;
+    bool f = true;
+    auto start = chrono::system_clock::now();
+    while (f)
     {
+        vector<uchar> status;
+        vector<float> err;
+        vector<KeyPoint> keyPoints;
+        vector<vector<DMatch>> matches;
+        Mat desc;
         Mat frame;
-        vid.read(frame);
-        imshow("batvid", frame);
-        cv::waitKey(25);
+        vector<DMatch> goodFlann;
+        f = vid.read(frame);
+        if(!f)
+        {
+            break;
+        }
+        resize(frame, frame, Size(frame.cols / 1.5, frame.rows / 1.5));
+
+        sift->detectAndCompute(frame, Mat(), keyPoints, desc);
+
+    	matcher->knnMatch(desc0, desc, matches, 2);
+
+        for (unsigned int i = 0; i < matches.size(); ++i) {
+            if (matches[i][0].distance < matches[i][1].distance * 0.45)
+                goodFlann.push_back(matches[i][0]);
+        }
+
+    	/*calcOpticalFlowPyrLK(oldFrame, frame, oldkp, newkp, status, err, Size(5, 5));
+        vector<Point2f>KLT;
+
+        for (uint i = 0; i < oldkp.size(); i++)
+        {
+            if (status[i] == 1) {
+                KLT.push_back(newkp[i]);
+            }
+        }
+        KeyPoint::convert(KLT, keyPoints);
+        Mat matchesFrame;
+        drawKeypoints(frame, keyPoints, matchesFrame);
+        oldFrame = frame.clone();
+        oldkp = KLT;*/
+
+        Mat matchesFrame;
+        drawMatches(I0, keyPoints0, frame, keyPoints, goodFlann, matchesFrame, Scalar::all(-1), Scalar::all(-1), vector<char>(), DrawMatchesFlags::NOT_DRAW_SINGLE_POINTS);
+        imshow("batvid", matchesFrame);
+        waitKey(1);
+        //render.write(matchesFrame);
     }
+    auto end = chrono::system_clock::now();
+    vid.release();
+    render.release();
+    chrono::duration<double> elapsed_seconds = end - start;
+    cout << "elapsed time: " << elapsed_seconds.count() << "s";
 }
 
 
