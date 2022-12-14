@@ -227,7 +227,7 @@ int main(int argc, char** argv)
 
     //------------------------------------------------------------------------------
 
-	VideoWriter render("test.avi", VideoWriter::fourcc('M', 'J', 'P', 'G'), 30, Size(I0.cols*2, I0.rows));
+	VideoWriter render("test.avi", VideoWriter::fourcc('M', 'J', 'P', 'G'), 30, Size(I0.cols, I0.rows));
     VideoCapture vid;
     vid.open(bigVideo);
 
@@ -279,6 +279,7 @@ int main(int argc, char** argv)
     line(frame1_axis, coordSystem[0], coordSystem[3], Scalar(255, 0, 0), 2);
     imshow("Repere", frame1_axis);
     cv::waitKey(22);
+    //render.write(frame1_axis);
 
     /*for (Mat& x : corners)
     {
@@ -381,13 +382,6 @@ int main(int argc, char** argv)
             i = 0;
         }
 
-        /*Mat Hi = findHomography(oldKLT, KLT, RANSAC);
-        Homographies.push_back(Hi);
-        Mat H0i = Mat::eye(Hi.rows, Hi.cols, Hi.type());
-        for(Mat& h : Homographies)
-        {
-            H0i = h * H0i;
-        }*/
         Mat Hiw = H0i * H0w;
         Mat Piw = findPose(Hiw);
 
@@ -411,7 +405,7 @@ int main(int argc, char** argv)
 
         oldFrame = frame.clone();
         i++;
-        //render.write(matchesFrame);
+        //render.write(frame_axis);
     }
     /*while (f)
     {
@@ -447,7 +441,7 @@ int main(int argc, char** argv)
     render.release();
     chrono::duration<double> elapsed_seconds = end - start;
     cout<<"---------------------------------------------------- - "<<endl;
-    cout << "elapsed time: " << elapsed_seconds.count() << "s";
+    cout << "elapsed time: " << elapsed_seconds.count() << "s" << endl;
     cout << "---------------------------------------------------- - " << endl;
 }
 
