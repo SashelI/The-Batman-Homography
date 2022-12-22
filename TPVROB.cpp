@@ -61,6 +61,38 @@ Mat findPose(Mat& H0w)
     return P0w;
 }
 
+void addImg(Mat& frame, const Mat& img, int& x, int& y)
+{
+    for (int i = x; i < x + img.cols; i++)
+    {
+        for (int j = y; j < y + img.rows; j++)
+        {
+            for (int k = 0; k < 3; k++)
+            {
+                frame.at<Vec3b>(j, i)[k] = img.at<Vec3b>(j - y, i - x)[k];
+            }
+        }
+    }
+}
+
+void drawCorners(Mat& frame, const vector<Mat>& c0, int& s, int& x, int& y, Mat H)
+{
+    vector<Point2f>corners1;
+    vector<Point2f>corners0;
+    for(auto& p : c0)
+    {
+        Mat p1 = H * p;
+        corners1.push_back(Point2f(p1.at<double>(0,0)/ p1.at<double>(2,0), p1.at<double>(1,0)/ p1.at<double>(2,0)));
+        corners0.push_back(Point2f(p.at<double>(0, 0), p.at<double>(1, 0)));
+    }
+    for (int i = 0; i < corners1.size(); i++)
+    {
+        Point2f p0 = Point2f(corners0[i].x / s + x, corners0[i].y / s + y);
+        circle(frame, corners1[i], 2, Scalar(0, 0, 255), FILLED);
+        line(frame, p0, corners1[i], Scalar(172, 172, 172));
+    }
+}
+
 int main(int argc, char** argv)
 {
     string smallPath = R"(C:\Users\user\Documents\_ESIRTP\3\VROB\Batman.jpg)";
@@ -70,7 +102,7 @@ int main(int argc, char** argv)
 
     Mat I0full = imread(bigPath);
     Mat I0;
-    resize(I0full, I0, Size(I0full.cols / 1.5, I0full.rows / 1.5)); //width, height
+    resize(I0full, I0, Size(I0full.cols/1.5, I0full.rows / 1.5)); //width, height
 
 
     //----------------------------------------------------------------------------------
@@ -200,9 +232,9 @@ int main(int argc, char** argv)
         coordSystem2D.push_back(cs2D);
     }
     Mat I0_axis = I0.clone();
-    line(I0_axis, coordSystem2D[0], coordSystem2D[1], Scalar(0, 0, 255), 2);
-    line(I0_axis, coordSystem2D[0], coordSystem2D[2], Scalar(0, 255, 0), 2);
-    line(I0_axis, coordSystem2D[0], coordSystem2D[3], Scalar(255, 0, 0), 2);
+    line(I0_axis, coordSystem2D[0], coordSystem2D[1], Scalar(0, 0, 255), 2, LINE_AA);
+    line(I0_axis, coordSystem2D[0], coordSystem2D[2], Scalar(0, 255, 0), 2, LINE_AA);
+    line(I0_axis, coordSystem2D[0], coordSystem2D[3], Scalar(255, 0, 0), 2, LINE_AA);
     imshow("Corners", I0_axis);
     cv::waitKey(0);
 
@@ -220,14 +252,17 @@ int main(int argc, char** argv)
         }
     }
     sift->detectAndCompute(I0, kpMask, keyPoints0, desc0);
-    /*Mat img = I0.clone();
-    drawKeypoints(I0, keyPoints0, img);
-    imshow("KeyPoints", img);
-    cv::waitKey(0);*/
-
+    Mat img = I0.clone();
+    drawKeypoints(I0, keyPoints0, img, Scalar(51, 255, 255));
+    int imgScale = 2;
+    resize(img, img, Size(img.cols / imgScale, img.rows / imgScale));
+    //cv::imshow("KeyPoints", img);
+    //cv::waitKey(0);
+    int x = I0full.cols - img.cols;
+    int y = 0;
     //------------------------------------------------------------------------------
 
-	VideoWriter render("test.avi", VideoWriter::fourcc('M', 'J', 'P', 'G'), 30, Size(I0.cols, I0.rows));
+	VideoWriter render("FinalRender10f.avi", VideoWriter::fourcc('M', 'J', 'P', 'G'), 30, Size(I0full.cols, I0full.rows));
     VideoCapture vid;
     vid.open(bigVideo);
 
@@ -241,7 +276,7 @@ int main(int argc, char** argv)
     vector<DMatch> goodMatches;
 
     vid.read(frame1);
-    resize(frame1, frame1, Size(frame1.cols / 1.5, frame1.rows / 1.5));
+    //resize(frame1, frame1, Size(frame1.cols / 1.5, frame1.rows / 1.5));
 
     sift->detectAndCompute(frame1, Mat(), keyPoints1, desc1);
     matcher->knnMatch(desc0, desc1, matches0, 2);
@@ -274,12 +309,21 @@ int main(int argc, char** argv)
         coordSystem.push_back(cs2D);
     }
     Mat frame1_axis = frame1.clone();
-    line(frame1_axis, coordSystem[0], coordSystem[1], Scalar(0, 0, 255), 2);
-    line(frame1_axis, coordSystem[0], coordSystem[2], Scalar(0, 255, 0), 2);
-    line(frame1_axis, coordSystem[0], coordSystem[3], Scalar(255, 0, 0), 2);
-    imshow("Repere", frame1_axis);
-    cv::waitKey(22);
-    //render.write(frame1_axis);
+    line(frame1_axis, coordSystem[0], coordSystem[1], Scalar(0, 0, 255), 2, LINE_AA);
+    line(frame1_axis, coordSystem[0], coordSystem[2], Scalar(0, 255, 0), 2, LINE_AA);
+    line(frame1_axis, coordSystem[0], coordSystem[3], Scalar(255, 0, 0), 2, LINE_AA);
+
+    vector<KeyPoint> kpDraw1;
+    KeyPoint::convert(kp1H, kpDraw1);
+    drawKeypoints(frame1_axis, kpDraw1, frame1_axis,Scalar(51,255,255), DrawMatchesFlags::NOT_DRAW_SINGLE_POINTS);
+
+    addImg(frame1_axis, img, x, y);
+
+    drawCorners(frame1_axis, corners, imgScale, x, y, H01);
+
+    //imshow("Repere et keyPoints", frame1_axis);
+    //cv::waitKey(22);
+    render.write(frame1_axis);
 
     /*for (Mat& x : corners)
     {
@@ -304,6 +348,7 @@ int main(int argc, char** argv)
     vector<vector<DMatch>> matches;
     vector<DMatch> goodFlann;
     Mat desc;
+    vector<Point2f> imgMatches;
     bool f = true;
     auto start = chrono::system_clock::now();
     int i = 0;
@@ -317,11 +362,13 @@ int main(int argc, char** argv)
         {
             break;
         }
-        resize(frame, frame, Size(frame.cols / 1.5, frame.rows / 1.5));
+        //resize(frame, frame, Size(frame.cols / 1.5, frame.rows / 1.5));
 
         Mat Hi;
         Mat H0i;
-        if (i < 20) {
+        bool noKLT = false;
+        imgMatches.clear();
+        if (i < 10) {
             vector<Point2f>KLT, oldKLT;
             calcOpticalFlowPyrLK(oldFrame, frame, oldkp, newkp, status, err, Size(5, 5));
 
@@ -330,12 +377,13 @@ int main(int argc, char** argv)
                 if (status[i] == 1) {
                     KLT.push_back(newkp[i]);
                     oldKLT.push_back(oldkp[i]);
+                    imgMatches.push_back(keyPoints0[i].pt);
                 }
             }
-            Hi = findHomography(oldKLT, KLT, RANSAC);
+        	Hi = findHomography(oldKLT, KLT, RANSAC);
         	H0i = Hi * Homographies;
-            Homographies = H0i.clone();
-            oldkp = KLT;
+        	Homographies = H0i.clone();
+        	oldkp = KLT;
         }
         else
         {
@@ -362,6 +410,7 @@ int main(int argc, char** argv)
                 }
                 H0i = findHomography(oldkpFlann, oldkp, RANSAC);
                 Homographies = H0i.clone();
+                imgMatches = oldkpFlann;
             }else
             {
                 vector<Point2f>KLT, oldKLT;
@@ -372,6 +421,7 @@ int main(int argc, char** argv)
                     if (status[i] == 1) {
                         KLT.push_back(newkp[i]);
                         oldKLT.push_back(oldkp[i]);
+                        imgMatches.push_back(keyPoints0[i].pt);
                     }
                 }
                 Hi = findHomography(oldKLT, KLT, RANSAC);
@@ -385,6 +435,8 @@ int main(int argc, char** argv)
         Mat Hiw = H0i * H0w;
         Mat Piw = findPose(Hiw);
 
+        vector<KeyPoint> kpDraw;
+        KeyPoint::convert(oldkp, kpDraw);
         coordSystem.clear();
         for (const auto& p : coordinateSystem)
         {
@@ -393,49 +445,23 @@ int main(int argc, char** argv)
             coordSystem.push_back(cs2D);
         }
         Mat frame_axis = frame.clone();
-        line(frame_axis, coordSystem[0], coordSystem[1], Scalar(0, 0, 255), 2);
-        line(frame_axis, coordSystem[0], coordSystem[2], Scalar(0, 255, 0), 2);
-        line(frame_axis, coordSystem[0], coordSystem[3], Scalar(255, 0, 0), 2);
-        imshow("Repere", frame_axis);
+        line(frame_axis, coordSystem[0], coordSystem[1], Scalar(0, 0, 255), 2, LINE_AA);
+        line(frame_axis, coordSystem[0], coordSystem[2], Scalar(0, 255, 0), 2, LINE_AA);
+        line(frame_axis, coordSystem[0], coordSystem[3], Scalar(255, 0, 0), 2, LINE_AA);
 
-        /*KeyPoint::convert(KLT, keyPoints);
-        Mat matchesFrame;
-        drawKeypoints(frame, keyPoints, matchesFrame);*/
-        waitKey(1);
+        drawKeypoints(frame_axis, kpDraw, frame_axis,Scalar(51, 255, 255), DrawMatchesFlags::NOT_DRAW_SINGLE_POINTS);
+
+        addImg(frame_axis, img, x, y);
+
+        drawCorners(frame_axis, corners, imgScale, x, y, H0i);
+
+        //imshow("Repere et keyPoints", frame_axis);
+        //waitKey(1);
 
         oldFrame = frame.clone();
         i++;
-        //render.write(frame_axis);
+        render.write(frame_axis);
     }
-    /*while (f)
-    {
-        vector<KeyPoint> keyPoints;
-        vector<vector<DMatch>> matches;
-        Mat desc;
-        Mat frame;
-        vector<DMatch> goodFlann;
-        f = vid.read(frame);
-        if (!f)
-        {
-            break;
-        }
-        resize(frame, frame, Size(frame.cols / 1.5, frame.rows / 1.5));
-
-        sift->detectAndCompute(frame, Mat(), keyPoints, desc);
-
-        matcher->knnMatch(desc0, desc, matches, 2);
-
-        for (unsigned int i = 0; i < matches.size(); ++i) {
-            if (matches[i][0].distance < matches[i][1].distance * 0.45)
-                goodFlann.push_back(matches[i][0]);
-        }
-
-        Mat matchesFrame;
-        drawMatches(I0, keyPoints0, frame, keyPoints, goodFlann, matchesFrame, Scalar::all(-1), Scalar::all(-1), vector<char>(), DrawMatchesFlags::NOT_DRAW_SINGLE_POINTS);
-        imshow("batvid", matchesFrame);
-        waitKey(1);
-        //render.write(matchesFrame);
-    }*/
     auto end = chrono::system_clock::now();
     vid.release();
     render.release();
