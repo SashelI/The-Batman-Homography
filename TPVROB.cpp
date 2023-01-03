@@ -4,22 +4,28 @@
 using namespace cv;
 using namespace std;
 
-vector<Point2f> X;
-vector<Point3f> X_3D;
-vector<vector<Point3f>> objPoint;
-vector<vector<Point2f>> imgPoint;
+vector<Point2f> X;                  //Vecteur des coins cliqués en pixels
+vector<Point3f> X_Meter_3D;         //vecteur des coins en 3D monde (origine en haut à gauche)
+vector<vector<Point3f>> objPoint;   //Vecteur des points 3D pour opencv
+vector<vector<Point2f>> imgPoint;   //Vecteur des points pixels pour opencv
 
 Mat K, distCoeffs;
 vector<Mat> R, T;
 
 Mat Homographies;
 
+/**
+ * Enregistre les coordonnees en pixel du point clique a la souris dans le vecteur X
+ */
 void onMouse(int action, int x, int y, int, void*) {
     if (action == cv::EVENT_LBUTTONDOWN) {
         X.push_back(Point{ x, y });
     }
 }
 
+/**
+ * Utilitaire
+ */
 string openCVType2str(int type) {
     string r;
 
@@ -43,24 +49,36 @@ string openCVType2str(int type) {
     return r;
 }
 
-Mat findPose(Mat& H0w)
+/**
+ * calcul de pose a partir de l'homographie selon la methode decrite dans l'etude source
+ * @param Hiw : Homographie de monde a pixel frame i
+ * @return Pose de la camera correspondant a l'homographie.
+ */
+Mat findPose(Mat& Hiw)
 {
-    Mat r12, r1, r2, PI;
-    Mat toR = K.inv() * H0w;
-    r1 = toR.col(0); r2 = toR.col(1);
+    Mat r1, r2, PI;                     //Matrices colonnes de rotation et pose temporaire
+    Mat HtoR = K.inv() * Hiw;           //D'homographie à vecteurs rotation et translation
+    r1 = HtoR.col(0); r2 = HtoR.col(1);
 
     Mat tmp1, tmp2;
     hconcat(r1, r2, tmp1);
     hconcat(tmp1, r1.cross(r2), tmp2);
-    hconcat(tmp2, toR.col(2), PI);
+    hconcat(tmp2, HtoR.col(2), PI);     //PI = [r1 r2 r1xr2 t]
 
-    Mat P0w = K * PI;
-    Mat homogene = Mat(1, 4, P0w.type(), 0.0);
+    Mat P0w = K * PI;                   //Application de la matrice intrinseque K
+    Mat homogene = Mat(1, 4, P0w.type(), 0.0);  //Ajout d'une ligne [0 0 0 1] pour matrice de pose carree
     homogene.at<double>(0, 3) = 1.0;
     vconcat(P0w, homogene, P0w);
     return P0w;
 }
 
+/**
+ * Ajoute l'image 0 dans un coin de la video pour rendu
+ * @param frame : frame de la video
+ * @param img : image a superposer
+ * @param x : position x souhaitee de l'image
+ * @param y : position y souhaitee de l'image
+ */
 void addImg(Mat& frame, const Mat& img, int& x, int& y)
 {
     for (int i = x; i < x + img.cols; i++)
@@ -75,6 +93,16 @@ void addImg(Mat& frame, const Mat& img, int& x, int& y)
     }
 }
 
+/**
+ * Calcule les correspondances entre les coins cliques dans l'image 0 et la frame courante.
+ * Dessine une ligne de suivi reliant les coins de l'image 0 et les coins dans la frame courante
+ * @param frame : frame courante de la video
+ * @param c0 : coins de l'image 0
+ * @param s : échelle de l'image
+ * @param x : position x de l'image
+ * @param y : position y de l'image
+ * @param H : homographie entre l'image 0 et la frame courante
+ */
 void drawCorners(Mat& frame, const vector<Mat>& c0, int& s, int& x, int& y, Mat H)
 {
     vector<Point2f>corners1;
@@ -89,23 +117,28 @@ void drawCorners(Mat& frame, const vector<Mat>& c0, int& s, int& x, int& y, Mat 
     {
         Point2f p0 = Point2f(corners0[i].x / s + x, corners0[i].y / s + y);
         circle(frame, corners1[i], 2, Scalar(0, 0, 255), FILLED);
-        line(frame, p0, corners1[i], Scalar(172, 172, 172));
+        line(frame, p0, corners1[i], Scalar(255, 213, 0));
     }
 }
 
 int main(int argc, char** argv)
 {
-    string smallPath = R"(C:\Users\user\Documents\_ESIRTP\3\VROB\Batman.jpg)";
+    //PENSER A CHANGER LES PATH AVANT RENDU
+    string smallPath = R"(C:\Users\user\Documents\_ESIRTP\3\VROB\Batman_r.jpg)";
     string bigPath = R"(D:\Documents\_TPESIR\3\VROB_data\Batman_r.jpg)";
     string smallVideo = R"(C:\Users\user\Documents\_ESIRTP\3\VROB\BatVideo.mp4)";
     string bigVideo = R"(D:\Documents\_TPESIR\3\VROB_data\BatVideo.mp4)";
 
-    Mat I0full = imread(bigPath);
+    Mat I0full = imread(smallPath);
     Mat I0;
     resize(I0full, I0, Size(I0full.cols/1.5, I0full.rows / 1.5)); //width, height
 
-
+	//----------------------------------------------------------------------------------
+    // Selection des coins a la souris
     //----------------------------------------------------------------------------------
+    {cout <<
+        "----------------------------------------------------------------------------------\n Selection des coins a la souris \n ----------------------------------------------------------------------------------"
+        << endl; }
 
     namedWindow("Corners Select");
 
@@ -120,27 +153,32 @@ int main(int argc, char** argv)
     }
     circle(I0, X[3], 2, Scalar{ 0, 0, 255 }, FILLED);
 
-    //------------------------------------------------------------------------------
+    //----------------------------------------------------------------------------------
+    // Creation des vecteurs de points et calibration
+    //----------------------------------------------------------------------------------
+    {cout <<
+        "----------------------------------------------------------------------------------\n Creation des vecteurs de points et calibration \n ----------------------------------------------------------------------------------"
+        << endl; }
 
     imgPoint.push_back(X);
 
-    X_3D.push_back(Point3f(0.0f, 0.0f, 0.0f));
-    X_3D.push_back(Point3f(1.0f, 0.0f, 0.0f));
-    X_3D.push_back(Point3f(0.0f, 1.0f, 0.0f));
-    X_3D.push_back(Point3f(1.0f, 1.0f, 0.0f));
-    objPoint.push_back(X_3D);
+    X_Meter_3D.push_back(Point3f(0.0f, 0.0f, 0.0f));
+    X_Meter_3D.push_back(Point3f(1.0f, 0.0f, 0.0f));
+    X_Meter_3D.push_back(Point3f(0.0f, 1.0f, 0.0f));
+    X_Meter_3D.push_back(Point3f(1.0f, 1.0f, 0.0f));
+    objPoint.push_back(X_Meter_3D);
 
-    vector<Point2f> objectPointsPlanar;
+    vector<Point2f> objectPointsPlanar;                 //coins monde en 2D pour homographie
     objectPointsPlanar.push_back(Point2f(0.0f, 0.0f));
     objectPointsPlanar.push_back(Point2f(1.0f, 0.0f));
     objectPointsPlanar.push_back(Point2f(0.0f, 1.0f));
     objectPointsPlanar.push_back(Point2f(1.0f, 1.0f));
 
-    calibrateCamera(objPoint, imgPoint, I0.size(), K, distCoeffs, R, T);
-
+    calibrateCamera(objPoint, imgPoint, I0.size(), K, distCoeffs, R, T);    //Calibration de la camera. K : matrice intrinseque
+    cout << "Matrice de paramètres intrinsèques caméra : \n" << K << endl;
     cout << "-------------------" << endl;
-    vector<Mat> corners;
 
+    vector<Mat> corners;        //vecteur des coins sous forme de matrices en coordonnees homogenes, pour traitements
     for (const auto& point : X)
     {
         Mat vectX = Mat(3, 1, CV_32F, 0.0f);
@@ -160,71 +198,49 @@ int main(int argc, char** argv)
         cornersMeter.push_back(Point2f(Xmeter.at<double>(0,0), Xmeter.at<double>(1,0)));
     }
 
-    Mat H = findHomography(objectPointsPlanar, X);
+    //----------------------------------------------------------------------------------
+    // Homographie zero et pose zero | calcul du repere zero
+    //----------------------------------------------------------------------------------
+    {cout <<
+        "----------------------------------------------------------------------------------\n Homographie zero et pose zero | calcul du repere zero \n ----------------------------------------------------------------------------------"
+        << endl; }
 
-    //------------------------------------------------------------------------------
+    Mat H = findHomography(objectPointsPlanar, X);  //Homograpghie entre les points monde et camera de l'image 0
 
     Mat d = Mat::eye(3, 3, K.type());
     Mat h12 = K.inv() * H;
     int s = h12.col(2).rows / h12.col(1).rows;
-    d.at<double>(1, 1) = 1.0 / s;
+    d.at<double>(1, 1) = 1.0 / s;                   //matrice pour correction d'echelle
 
-    Mat H0w = H * d;
+    Mat H0w = H * d;                                //correction d'echelle
 
-    Mat P0w = findPose(H0w);
-    cout << P0w << endl;
-    vector<Mat>xtest;
+    Mat P0w = findPose(H0w);                        //calcul de la pose a partir de l'homographie
+    cout << "Pose world to zero : \n"<< P0w << endl;
+    cout << "-------------------" << endl;
+    vector<Mat>xEn3D;
     for (const auto& point : X)
     {
         Mat vectX = Mat(3, 1, P0w.type(), 0.0);
         vectX.at<double>(0, 0) = point.x;
         vectX.at<double>(1, 0) = point.y;
         vectX.at<double>(2, 0) = 0.0;
-        xtest.push_back(vectX);
+        xEn3D.push_back(vectX);
     }
-    for (const auto& x : xtest)
+    for (const auto& x : xEn3D)
     {
         cout << "Point en px : \n" << x << endl;
         Mat posetest = H0w.inv() * x;
         cout << "Point en 3D : \n" << posetest << endl;
     }
 
-    vector<Point3f>pointTest;
-
-    Mat axisx = Mat({ 1.0, 0.0, 0.0, 1.0 });
+    Mat axisx = Mat({ 1.0, 0.0, 0.0, 1.0 });        //Points du repere monde en 3D homogene
     Mat axisy = Mat({ 0.0, 1.0, 0.0, 1.0 });
     Mat axisz = Mat({ 0.0, 0.0, 1.0, 1.0 });
     Mat origin = Mat({ 0.0, 0.0, 0.0, 1.0 });
 
     vector<Mat> coordinateSystem = { origin, axisx, axisy, axisz };
 
-    /*for (const auto& p : X_3D)
-    {
-        Mat vec = Mat(4, 1, P0w.type(), 0.0);
-        vec.at<double>(0, 0) = p.x;
-        vec.at<double>(1, 0) = p.y;
-        vec.at<double>(2, 0) = 0.0;
-        vec.at<double>(3, 0) = 1.0;
-
-        Mat posetest = P0w * vec;
-
-        pointTest.push_back(Point3f(posetest.at<double>(0,0), posetest.at<double>(1,0), posetest.at<double>(2,0)));
-    }
-
-    vector<Point2f>endPointTest;
-    for (auto& p : pointTest)
-    {
-        endPointTest.push_back(Point2f(p.x / p.z, p.y / p.z));
-        cout << "Point en px : \n" << p << endl;
-    }
-
-    Mat I0_ = I0.clone();
-    line(I0_, endPointTest[0], endPointTest[1], Scalar(0, 0, 255), 2);
-    line(I0_, endPointTest[0], endPointTest[2], Scalar(0, 255, 0), 2);
-    line(I0_, endPointTest[0], endPointTest[3], Scalar(255, 0, 0), 2);
-    imshow("Corners", I0_);*/
-
-    vector <Point2f> coordSystem2D;
+    vector <Point2f> coordSystem2D;                 //Vecteur des points image du repere en 2D
     for (const auto& p : coordinateSystem)
     {
         Mat tmp = P0w * p;
@@ -232,43 +248,55 @@ int main(int argc, char** argv)
         coordSystem2D.push_back(cs2D);
     }
     Mat I0_axis = I0.clone();
-    line(I0_axis, coordSystem2D[0], coordSystem2D[1], Scalar(0, 0, 255), 2, LINE_AA);
+    line(I0_axis, coordSystem2D[0], coordSystem2D[1], Scalar(0, 0, 255), 2, LINE_AA);   //Tracage des axes sur l'image
     line(I0_axis, coordSystem2D[0], coordSystem2D[2], Scalar(0, 255, 0), 2, LINE_AA);
     line(I0_axis, coordSystem2D[0], coordSystem2D[3], Scalar(255, 0, 0), 2, LINE_AA);
+    cout << ":::::::::::::::Appuyez sur une touche pour continuer:::::::::::::::" << endl;
     imshow("Corners", I0_axis);
     cv::waitKey(0);
 
-    //------------------------------------------------------------------------------
+    //----------------------------------------------------------------------------------
+    // Calcul des points d'interets sur l'image 0
+    //----------------------------------------------------------------------------------
+    {cout <<
+        "----------------------------------------------------------------------------------\n Calcul des points d'interets sur l'image 0 \n ----------------------------------------------------------------------------------"
+        << endl; }
 
     Ptr<SIFT> sift = SIFT::create();
-    vector<KeyPoint> keyPoints0, KeyPoints1;
-    Mat desc0, desc1;
-    Mat kpMask = Mat::zeros(I0.rows, I0.cols, CV_8U);
-    for (int j = X[0].x; j < X[3].x + 1; j++)
+    vector<KeyPoint> keyPoints0;                        //Points cles
+    Mat desc0, desc1;                                   //Descripteurs
+    Mat kpMask = Mat::zeros(I0.rows, I0.cols, CV_8U);   //Masque de detection
+    for (int j = X[0].x; j < X[3].x + 1; j++)           //On ne souhaite detecter les points cles qu'entre les quatre coins choisis
     {
         for (int i = X[0].y; i < X[3].y + 1; i++)
         {
             kpMask.at<uint8_t>(i, j) = 1;
         }
     }
-    sift->detectAndCompute(I0, kpMask, keyPoints0, desc0);
+    sift->detectAndCompute(I0, kpMask, keyPoints0, desc0);  //Detection des points sift
     Mat img = I0.clone();
     drawKeypoints(I0, keyPoints0, img, Scalar(51, 255, 255));
     int imgScale = 2;
     resize(img, img, Size(img.cols / imgScale, img.rows / imgScale));
-    //cv::imshow("KeyPoints", img);
-    //cv::waitKey(0);
-    int x = I0full.cols - img.cols;
-    int y = 0;
-    //------------------------------------------------------------------------------
+    /*cv::imshow("KeyPoints", img);
+    cv::waitKey(0);*/
+    int x = I0full.cols - img.cols; //position x pour rendu
+    int y = 0;                      //position y pour rendu
+
+	//----------------------------------------------------------------------------------
+    // Calcul de pose et axes sur la premiere frame de la video
+    //----------------------------------------------------------------------------------
+    {cout <<
+        "----------------------------------------------------------------------------------\n Calcul de pose et axes sur la premiere frame de la video \n ----------------------------------------------------------------------------------"
+        << endl; }
 
 	VideoWriter render("FinalRender10f.avi", VideoWriter::fourcc('M', 'J', 'P', 'G'), 30, Size(I0full.cols, I0full.rows));
     VideoCapture vid;
-    vid.open(bigVideo);
+    vid.open(smallVideo);
 
     vector<Point2f>kp0, newkp, oldkp, kp0H, kp1H;
 
-    Ptr<FlannBasedMatcher> matcher = FlannBasedMatcher::create();
+    Ptr<FlannBasedMatcher> matcher = FlannBasedMatcher::create();   //matcher Flann
 
     vector<KeyPoint> keyPoints1;
     vector<vector<DMatch>> matches0;
@@ -279,27 +307,27 @@ int main(int argc, char** argv)
     //resize(frame1, frame1, Size(frame1.cols / 1.5, frame1.rows / 1.5));
 
     sift->detectAndCompute(frame1, Mat(), keyPoints1, desc1);
-    matcher->knnMatch(desc0, desc1, matches0, 2);
+    matcher->knnMatch(desc0, desc1, matches0, 2);               //match des points cles entre l'image 0 et la frame 1 avec flann
 
     for (unsigned int i = 0; i < matches0.size(); ++i) {
-        if (matches0[i][0].distance < matches0[i][1].distance * 0.45)
+        if (matches0[i][0].distance < matches0[i][1].distance * 0.45)   //Selection des matches pertinents
             goodMatches.push_back(matches0[i][0]);
     }
 
-    for(auto& m : goodMatches)
+    for(auto& m : goodMatches)  //On ne garde que les poinst cles pertinents
     {
         Point2f p1 = keyPoints1[m.trainIdx].pt;
         Point2f p0 = keyPoints0[m.queryIdx].pt;
-        oldkp.push_back(p1);
-    	kp0H.push_back(p0);
-    	kp1H.push_back(p1);
+        oldkp.push_back(p1);    //sauvegarde des points cles pour la suite
+    	kp0H.push_back(p0);     //bons points cles dans l'image 0
+    	kp1H.push_back(p1);     //bons points cles dans la frame 1
     }
 
-    Mat H01 = findHomography(kp0H, kp1H, RANSAC);
-    Homographies = H01.clone();
-    Mat H1w = H01 * H0w;
+    Mat H01 = findHomography(kp0H, kp1H, RANSAC);   //Homographie entre l'image 0 et la frame 1 en utilisant les points precedents, et RANSAC.
+    Homographies = H01.clone();                     //Sauvegarde de l'homographie pour produit futur
+    Mat H1w = H01 * H0w;                            //Matrice d'homographie entre la frame 1 et le monde
 
-    Mat P1w = findPose(H1w);
+    Mat P1w = findPose(H1w);    //Pose frame 1
 
     vector <Point2f> coordSystem;
     for (const auto& p : coordinateSystem)
@@ -321,38 +349,26 @@ int main(int argc, char** argv)
 
     drawCorners(frame1_axis, corners, imgScale, x, y, H01);
 
-    //imshow("Repere et keyPoints", frame1_axis);
-    //cv::waitKey(22);
-    render.write(frame1_axis);
+    imshow("Repere et keyPoints", frame1_axis);
+    cv::waitKey(22);
+    //render.write(frame1_axis);
 
-    /*for (Mat& x : corners)
-    {
-        Mat p = H01 * Mat(x);
-        Point2f p2 = Point2f(p.at<double>(0, 0) / p.at<double>(2, 0), p.at<double>(1, 0) / p.at<double>(2, 0));
-        p.at<double>(0, 0) = p2.x;
-        p.at<double>(1, 0) = p2.y;
-        p.at<double>(2, 0) = 0.0;
-        circle(frame1, p2, 2, Scalar{ 0, 0, 255 }, FILLED);
-        cout << "Point en px : \n" << p2 << endl;
-        Mat posetest = H1w.inv() * p;
-        cout << "Point en 3D : \n" << posetest << endl;
-    }
-    imshow("test", frame1);
-    waitKey(0);*/
-
-    //------------------------------------------------------------------------------
+    //----------------------------------------------------------------------------------
+    // Calculs de pose et axes pour la video
+    //----------------------------------------------------------------------------------
+    {cout <<
+        "----------------------------------------------------------------------------------\n Calculs de pose et axes pour la video \n ----------------------------------------------------------------------------------"
+        << endl; }
 
     Mat oldFrame = frame1.clone();
-    //oldkp = kp0;
     vector<KeyPoint> keyPoints;
     vector<vector<DMatch>> matches;
     vector<DMatch> goodFlann;
     Mat desc;
-    vector<Point2f> imgMatches;
     bool f = true;
     auto start = chrono::system_clock::now();
     int i = 0;
-    while (f)
+    while (f)   //Tant que la video contient des frames
     {
         vector<uchar> status;
         vector<float> err;
@@ -364,23 +380,24 @@ int main(int argc, char** argv)
         }
         //resize(frame, frame, Size(frame.cols / 1.5, frame.rows / 1.5));
 
-        Mat Hi;
-        Mat H0i;
-        bool noKLT = false;
-        imgMatches.clear();
+        Mat Hi;     //Matrice d'homographie entre la frame i-1 et la frame i
+        Mat H0i;    //Matrice d'homographie entre l'image 0 et la frame i
+
+        /*
+         * Suivi des points cles par KLT. Pour plus de precision, on recalcule un flann toutes les 10 frames.
+         */
         if (i < 10) {
             vector<Point2f>KLT, oldKLT;
             calcOpticalFlowPyrLK(oldFrame, frame, oldkp, newkp, status, err, Size(5, 5));
 
-            for (uint i = 0; i < oldkp.size(); i++)
+            for (uint i = 0; i < oldkp.size(); i++)     //Selection des points cles pertinents
             {
                 if (status[i] == 1) {
                     KLT.push_back(newkp[i]);
                     oldKLT.push_back(oldkp[i]);
-                    imgMatches.push_back(keyPoints0[i].pt);
                 }
             }
-        	Hi = findHomography(oldKLT, KLT, RANSAC);
+        	Hi = findHomography(oldKLT, KLT, RANSAC);   //Homographie
         	H0i = Hi * Homographies;
         	Homographies = H0i.clone();
         	oldkp = KLT;
@@ -398,7 +415,7 @@ int main(int argc, char** argv)
                     goodFlann.push_back(matches[i][0]);
             }
 
-            if (goodFlann.size() > 10) {
+            if (goodFlann.size() > 10) {        //Si flann a detecte assez de points
                 vector<Point2f> oldkpFlann;
                 oldkp.clear();
                 for (auto& m : goodFlann)
@@ -410,8 +427,7 @@ int main(int argc, char** argv)
                 }
                 H0i = findHomography(oldkpFlann, oldkp, RANSAC);
                 Homographies = H0i.clone();
-                imgMatches = oldkpFlann;
-            }else
+            }else                               //Sinon
             {
                 vector<Point2f>KLT, oldKLT;
                 calcOpticalFlowPyrLK(oldFrame, frame, oldkp, newkp, status, err, Size(5, 5));
@@ -421,7 +437,6 @@ int main(int argc, char** argv)
                     if (status[i] == 1) {
                         KLT.push_back(newkp[i]);
                         oldKLT.push_back(oldkp[i]);
-                        imgMatches.push_back(keyPoints0[i].pt);
                     }
                 }
                 Hi = findHomography(oldKLT, KLT, RANSAC);
@@ -433,7 +448,7 @@ int main(int argc, char** argv)
         }
 
         Mat Hiw = H0i * H0w;
-        Mat Piw = findPose(Hiw);
+        Mat Piw = findPose(Hiw);    //Pose a la frame i
 
         vector<KeyPoint> kpDraw;
         KeyPoint::convert(oldkp, kpDraw);
@@ -455,13 +470,21 @@ int main(int argc, char** argv)
 
         drawCorners(frame_axis, corners, imgScale, x, y, H0i);
 
-        //imshow("Repere et keyPoints", frame_axis);
-        //waitKey(1);
+        imshow("Repere et keyPoints", frame_axis);
+        waitKey(1);
 
         oldFrame = frame.clone();
         i++;
-        render.write(frame_axis);
+        //render.write(frame_axis);
     }
+
+	//----------------------------------------------------------------------------------
+	// Fin
+	//----------------------------------------------------------------------------------
+    {cout <<
+        "----------------------------------------------------------------------------------\n Fin \n ----------------------------------------------------------------------------------"
+        << endl; }
+
     auto end = chrono::system_clock::now();
     vid.release();
     render.release();
