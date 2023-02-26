@@ -1,3 +1,3 @@
 # VROB1_TP
 
-School projet : pose calculation on a vido with a moving object using homographies
+School projet : pose calculation on a video with a moving object using homographies
