@@ -57,7 +57,7 @@ string openCVType2str(int type) {
 Mat findPose(Mat& Hiw)
 {
     Mat r1, r2, PI;                     //Matrices colonnes de rotation et pose temporaire
-    Mat HtoR = K.inv() * Hiw;           //D'homographie à vecteurs rotation et translation
+    Mat HtoR = K.inv() * Hiw;           //Passage d'homographie à vecteurs rotation et translation
     r1 = HtoR.col(0); r2 = HtoR.col(1);
 
     Mat tmp1, tmp2;
@@ -123,13 +123,10 @@ void drawCorners(Mat& frame, const vector<Mat>& c0, int& s, int& x, int& y, Mat 
 
 int main(int argc, char** argv)
 {
-    //PENSER A CHANGER LES PATH AVANT RENDU
-    string smallPath = R"(C:\Users\user\Documents\_ESIRTP\3\VROB\Batman_r.jpg)";
-    string bigPath = R"(D:\Documents\_TPESIR\3\VROB_data\Batman_r.jpg)";
-    string smallVideo = R"(C:\Users\user\Documents\_ESIRTP\3\VROB\BatVideo.mp4)";
-    string bigVideo = R"(D:\Documents\_TPESIR\3\VROB_data\BatVideo.mp4)";
+    string imgPath = R"(Batman_r.jpg)";
+    string vidPath = R"(BatVideo.mp4)";
 
-    Mat I0full = imread(smallPath);
+    Mat I0full = imread(imgPath);
     Mat I0;
     resize(I0full, I0, Size(I0full.cols/1.5, I0full.rows / 1.5)); //width, height
 
@@ -292,7 +289,7 @@ int main(int argc, char** argv)
 
 	VideoWriter render("FinalRender10f.avi", VideoWriter::fourcc('M', 'J', 'P', 'G'), 30, Size(I0full.cols, I0full.rows));
     VideoCapture vid;
-    vid.open(smallVideo);
+    vid.open(vidPath);
 
     vector<Point2f>kp0, newkp, oldkp, kp0H, kp1H;
 
@@ -325,7 +322,7 @@ int main(int argc, char** argv)
 
     Mat H01 = findHomography(kp0H, kp1H, RANSAC);   //Homographie entre l'image 0 et la frame 1 en utilisant les points precedents, et RANSAC.
     Homographies = H01.clone();                     //Sauvegarde de l'homographie pour produit futur
-    Mat H1w = H01 * H0w;                            //Matrice d'homographie entre la frame 1 et le monde
+    Mat H1w = H01 * H0w;                            //Matrice d'homographie entre le monde et la frame 1
 
     Mat P1w = findPose(H1w);    //Pose frame 1
 
